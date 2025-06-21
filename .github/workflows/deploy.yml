@@ -16,23 +16,22 @@ jobs:
     - name: 📥 Checkout code
       uses: actions/checkout@v3
 
-    - name: 📛 Set version name using timestamp
+    - name: 📛 Set version name
       id: set-tar-name
       run: |
-        VERSION="v$(date +%Y%m%d%H%M%S)"
-        echo "tar_name=hello_app_${VERSION}.tar.gz" >> $GITHUB_OUTPUT
-        echo "version=$VERSION" >> $GITHUB_ENV
+        TIMESTAMP=$(date +'%Y%m%d%H%M%S')
+        echo "tar_name=hello_app_latest.tar.gz" >> $GITHUB_OUTPUT
 
     - name: 🏗️ Build tar.gz package
       run: |
         mkdir -p dist
-        tar -czvf dist/${{ steps.set-tar-name.outputs.tar_name }} app.py requirements.txt
+        tar -czvf dist/hello_app_latest.tar.gz app.py requirements.txt
 
     - name: 💾 Upload tar.gz to GitHub Packages
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ steps.set-tar-name.outputs.tar_name }}
-        path: dist/${{ steps.set-tar-name.outputs.tar_name }}
+        name: hello_app_latest.tar.gz
+        path: dist/hello_app_latest.tar.gz
 
   deploy-to-ec2:
     needs: build-package
@@ -41,7 +40,8 @@ jobs:
     - name: 📥 Download artifact
       uses: actions/download-artifact@v4
       with:
-        name: ${{ needs.build-package.outputs.tar_name }}
+        name: hello_app_latest.tar.gz
+        path: artifact
 
     - name: 📤 SCP to EC2
       uses: appleboy/scp-action@v0.1.4
@@ -49,7 +49,7 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
-        source: ${{ needs.build-package.outputs.tar_name }}
+        source: artifact/hello_app_latest.tar.gz
         target: /home/${{ secrets.EC2_USER }}/hello-app/
 
     - name: 🚀 SSH and Deploy with venv
@@ -60,20 +60,17 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           cd hello-app
-          TARBALL="${{ needs.build-package.outputs.tar_name }}"
+          TARBALL="hello_app_latest.tar.gz"
           echo "📦 Unpacking $TARBALL"
           rm -f app.py requirements.txt hello_app_*.tar.gz
           tar -xzvf "$TARBALL"
           rm -f "$TARBALL"
 
-          # Set up virtual environment
           python3 -m venv venv
           ./venv/bin/pip install --upgrade pip
           ./venv/bin/pip install -r requirements.txt
 
-          # Stop any previously running instance
           pkill -f "venv/bin/python app.py" || true
-
           echo "✅ Launching app with:"
           ./venv/bin/python --version
           nohup ./venv/bin/python app.py > out.log 2>&1 &
