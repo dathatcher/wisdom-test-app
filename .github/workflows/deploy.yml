@@ -1,10 +1,10 @@
 name: 📦 Build and Deploy Hello World App
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
   build-package:
@@ -16,19 +16,19 @@ jobs:
     - name: 📥 Checkout code
       uses: actions/checkout@v3
 
-    - name: 🕒 Generate timestamp version
+    - name: 🕒 Generate timestamp and tarball name
       id: set-tar-name
       run: |
-        VERSION="v$(date -u +'%Y%m%d%H%M%S')"
-        TAR_NAME="hello_app_${VERSION}.tar.gz"
-        echo "tar_name=$TAR_NAME" >> $GITHUB_OUTPUT
+        TIMESTAMP=$(date +%Y%m%d%H%M%S)
+        TAR_NAME="hello_app_v${TIMESTAMP}.tar.gz"
+        echo "tar_name=${TAR_NAME}" >> $GITHUB_OUTPUT
 
     - name: 🏗️ Build tar.gz package
       run: |
         mkdir -p dist
         tar -czvf dist/${{ steps.set-tar-name.outputs.tar_name }} app.py requirements.txt
 
-    - name: 💾 Upload tar.gz to GitHub Packages
+    - name: 💾 Upload tar.gz as artifact
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.set-tar-name.outputs.tar_name }}
@@ -37,11 +37,13 @@ jobs:
   deploy-to-ec2:
     needs: build-package
     runs-on: ubuntu-latest
+
     steps:
     - name: 📥 Download artifact
       uses: actions/download-artifact@v4
       with:
         name: ${{ needs.build-package.outputs.tar_name }}
+        path: ./artifact
 
     - name: 📤 SCP to EC2
       uses: appleboy/scp-action@v0.1.4
@@ -49,7 +51,7 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
-        source: ${{ needs.build-package.outputs.tar_name }}
+        source: artifact/${{ needs.build-package.outputs.tar_name }}
         target: /home/${{ secrets.EC2_USER }}/hello-app/
 
     - name: 🚀 SSH and Deploy with venv
@@ -66,10 +68,15 @@ jobs:
           tar -xzvf "$TARBALL"
           rm -f "$TARBALL"
 
+          # Set up virtual environment
           python3 -m venv venv
           ./venv/bin/pip install --upgrade pip
           ./venv/bin/pip install -r requirements.txt
 
+          # Stop any previous instance
           pkill -f "venv/bin/python app.py" || true
-          echo "✅ Starting app with:" && ./venv/bin/python --version
+
+          # Start the app
+          echo "✅ Launching app with Python:"
+          ./venv/bin/python --version
           nohup ./venv/bin/python app.py > out.log 2>&1 &
