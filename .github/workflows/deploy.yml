@@ -38,4 +38,7 @@ jobs:
             pip install -r requirements.txt
 
             pkill -f "venv/bin/python app.py" || true
+
+            # Start app in background, disown to avoid SIGTERM issue
             nohup ./venv/bin/python app.py > out.log 2>&1 &
+            disown
