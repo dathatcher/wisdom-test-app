@@ -8,8 +8,11 @@ on:
         required: true
 
   push:
-     branches:
+    branches:
       - main
+
+env:
+  PACKAGE_NAME: hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz
 
 jobs:
   build-package:
@@ -21,13 +24,13 @@ jobs:
     - name: 🏗️ Build tar.gz package
       run: |
         mkdir dist
-        tar -czvf dist/hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz app.py requirements.txt
+        tar -czvf dist/${{ env.PACKAGE_NAME }} app.py requirements.txt
 
     - name: 💾 Upload tar.gz to GitHub Packages
       uses: actions/upload-artifact@v4
       with:
-        name: hello-app-${{ github.event.inputs.version || 'pr' }}
-        path: dist/hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz
+        name: hello-app
+        path: dist/${{ env.PACKAGE_NAME }}
 
   deploy-to-ec2:
     needs: build-package
@@ -36,7 +39,7 @@ jobs:
     - name: 📥 Download artifact
       uses: actions/download-artifact@v4
       with:
-        name: hello-app-${{ github.event.inputs.version || 'pr' }}
+        name: hello-app
 
     - name: 📤 SCP to EC2
       uses: appleboy/scp-action@v0.1.4
@@ -44,7 +47,7 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
-        source: hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz
+        source: ${{ env.PACKAGE_NAME }}
         target: /home/${{ secrets.EC2_USER }}/hello-app/
 
     - name: 🚀 SSH and Deploy with venv
@@ -56,8 +59,8 @@ jobs:
         script: |
           cd hello-app
           rm -f app.py requirements.txt hello_app_*.tar.gz
-          tar -xzvf hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz
-          rm -f hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz
+          tar -xzvf ${{ env.PACKAGE_NAME }}
+          rm -f ${{ env.PACKAGE_NAME }}
 
           # Set up virtual environment
           python3 -m venv venv
