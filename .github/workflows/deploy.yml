@@ -11,9 +11,6 @@ on:
     branches:
       - main
 
-env:
-  PACKAGE_NAME: hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz
-
 jobs:
   build-package:
     runs-on: ubuntu-latest
@@ -24,13 +21,16 @@ jobs:
     - name: 🏗️ Build tar.gz package
       run: |
         mkdir dist
-        tar -czvf dist/${{ env.PACKAGE_NAME }} app.py requirements.txt
+        echo "VERSION=${{ github.event.inputs.version || 'pr' }}" >> $GITHUB_ENV
+        TAR_NAME="hello_app_${VERSION}.tar.gz"
+        echo "TAR_NAME=$TAR_NAME" >> $GITHUB_ENV
+        tar -czvf dist/$TAR_NAME app.py requirements.txt
 
     - name: 💾 Upload tar.gz to GitHub Packages
       uses: actions/upload-artifact@v4
       with:
         name: hello-app
-        path: dist/${{ env.PACKAGE_NAME }}
+        path: dist/${{ env.TAR_NAME }}
 
   deploy-to-ec2:
     needs: build-package
@@ -47,7 +47,7 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
-        source: ${{ env.PACKAGE_NAME }}
+        source: ${{ env.TAR_NAME }}
         target: /home/${{ secrets.EC2_USER }}/hello-app/
 
     - name: 🚀 SSH and Deploy with venv
@@ -59,17 +59,13 @@ jobs:
         script: |
           cd hello-app
           rm -f app.py requirements.txt hello_app_*.tar.gz
-          tar -xzvf ${{ env.PACKAGE_NAME }}
-          rm -f ${{ env.PACKAGE_NAME }}
+          tar -xzvf hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz || tar -xzvf hello_app_pr.tar.gz
+          rm -f hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz || rm -f hello_app_pr.tar.gz
 
-          # Set up virtual environment
           python3 -m venv venv
           source venv/bin/activate
           venv/bin/pip install --upgrade pip
           venv/bin/pip install -r requirements.txt
 
-          # Stop any previously running instance
           pkill -f "venv/bin/python app.py" || true
-
-          # Start the app using the virtual environment
           nohup venv/bin/python app.py > out.log 2>&1 &
