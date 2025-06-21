@@ -7,9 +7,9 @@ on:
         description: 'App version tag (e.g., v1.0.0)'
         required: true
 
-  pull_request:
+    push:
     branches:
-      - main  # Adjust this if your deployment branch is different
+      - main
 
 jobs:
   build-package:
