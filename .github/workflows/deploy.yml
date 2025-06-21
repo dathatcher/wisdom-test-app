@@ -16,8 +16,12 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            APP_DIR=~/hello-app
+            set -e  # exit on failure
 
+            APP_DIR=~/hello-app
+            cd ~
+
+            # Clone or update app
             if [ ! -d "$APP_DIR/.git" ]; then
               rm -rf $APP_DIR
               git clone https://github.com/dathatcher/wisdom-test-app.git $APP_DIR
@@ -28,7 +32,7 @@ jobs:
 
             cd $APP_DIR
 
-            # Set up venv if needed
+            # Set up virtualenv
             if [ ! -d "venv" ]; then
               python3 -m venv venv
             fi
@@ -37,8 +41,16 @@ jobs:
             pip install --upgrade pip
             pip install -r requirements.txt
 
+            # Kill existing app
             pkill -f "venv/bin/python app.py" || true
 
-            # Start app in background, disown to avoid SIGTERM issue
-            nohup ./venv/bin/python app.py > out.log 2>&1 &
-            disown
+            # Use absolute path to Python
+            PYTHON=$(realpath venv/bin/python)
+
+            # Start app in background (detach with setsid + nohup)
+            echo "Launching app with $PYTHON"
+            nohup setsid $PYTHON app.py > out.log 2>&1 < /dev/null &
+            sleep 3
+
+            # Show process info for confirmation
+            pgrep -af "python app.py" || echo "❌ App failed to restart"
