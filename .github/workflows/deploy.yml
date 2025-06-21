@@ -20,8 +20,13 @@ jobs:
 
     - name: 🏗️ Build tar.gz package
       run: |
-        mkdir dist
-        tar -czvf dist/hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz app.py requirements.txt
+        mkdir -p dist
+        VERSION_TAG="${{ github.event.inputs.version }}"
+        if [ -z "$VERSION_TAG" ]; then
+          VERSION_TAG="pr"
+        fi
+        echo "📦 Using version: $VERSION_TAG"
+        tar -czvf dist/hello_app_${VERSION_TAG}.tar.gz app.py requirements.txt
 
     - name: 💾 Upload tar.gz to GitHub Packages
       uses: actions/upload-artifact@v4
@@ -55,19 +60,28 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           cd hello-app
+
+          # Determine tarball name
+          if [ -f "hello_app_${{ github.event.inputs.version }}.tar.gz" ]; then
+            TARBALL_NAME="hello_app_${{ github.event.inputs.version }}.tar.gz"
+          else
+            TARBALL_NAME="hello_app_pr.tar.gz"
+          fi
+
+          echo "📦 Unpacking $TARBALL_NAME"
           rm -f app.py requirements.txt hello_app_*.tar.gz
-          tar -xzvf hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz
-          rm -f hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz
+          tar -xzvf "$TARBALL_NAME"
+          rm -f "$TARBALL_NAME"
 
           # Set up virtual environment
           python3 -m venv venv
-          source venv/bin/activate
           ./venv/bin/pip install --upgrade pip
           ./venv/bin/pip install -r requirements.txt
 
-          # Stop any previously running instance
-          pkill -f "./venv/bin/python app.py" || true
+          # Stop previously running app if any
+          pkill -f "venv/bin/python app.py" || true
 
-          # Start the app using the virtual environment
-          echo "✅ Using Python from virtualenv:" && ./venv/bin/python --version
+          # Start the app
+          echo "✅ Using Python from virtualenv:"
+          ./venv/bin/python --version
           nohup ./venv/bin/python app.py > out.log 2>&1 &
