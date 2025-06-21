@@ -1,15 +1,10 @@
 name: 📦 Build and Deploy Hello World App
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'App version tag (e.g., v1.0.0)'
-        required: true
-
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   build-package:
@@ -21,14 +16,12 @@ jobs:
     - name: 📥 Checkout code
       uses: actions/checkout@v3
 
-    - name: 📛 Set version name
+    - name: 🕒 Generate timestamp version
       id: set-tar-name
       run: |
-        VERSION="${{ github.event.inputs.version }}"
-        if [ -z "$VERSION" ]; then
-          VERSION="pr"
-        fi
-        echo "tar_name=hello_app_${VERSION}.tar.gz" >> $GITHUB_OUTPUT
+        VERSION="v$(date -u +'%Y%m%d%H%M%S')"
+        TAR_NAME="hello_app_${VERSION}.tar.gz"
+        echo "tar_name=$TAR_NAME" >> $GITHUB_OUTPUT
 
     - name: 🏗️ Build tar.gz package
       run: |
