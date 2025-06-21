@@ -1,76 +1,23 @@
-name: 📦 Build and Deploy Hello World App
+name: 🚀 Deploy Hello App (Simple)
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
 
 jobs:
-  build-package:
-    runs-on: ubuntu-latest
-    outputs:
-      tar_name: ${{ steps.set-tar-name.outputs.tar_name }}
-
-    steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v3
-
-    - name: 📛 Set version name
-      id: set-tar-name
-      run: |
-        TIMESTAMP=$(date +'%Y%m%d%H%M%S')
-        echo "tar_name=hello_app_latest.tar.gz" >> $GITHUB_OUTPUT
-
-    - name: 🏗️ Build tar.gz package
-      run: |
-        mkdir -p dist
-        tar -czvf dist/hello_app_latest.tar.gz app.py requirements.txt
-
-    - name: 💾 Upload tar.gz to GitHub Packages
-      uses: actions/upload-artifact@v4
-      with:
-        name: hello_app_latest.tar.gz
-        path: dist/hello_app_latest.tar.gz
-
-  deploy-to-ec2:
-    needs: build-package
+  deploy:
     runs-on: ubuntu-latest
     steps:
-    - name: 📥 Download artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: hello_app_latest.tar.gz
-        path: artifact
-
-    - name: 📤 SCP to EC2
-      uses: appleboy/scp-action@v0.1.4
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USER }}
-        key: ${{ secrets.EC2_SSH_KEY }}
-        source: artifact/hello_app_latest.tar.gz
-        target: /home/${{ secrets.EC2_USER }}/hello-app/
-
-    - name: 🚀 SSH and Deploy with venv
+    - name: 🚀 SSH, Pull, and Restart App
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          cd hello-app
-          TARBALL="hello_app_latest.tar.gz"
-          echo "📦 Unpacking $TARBALL"
-          rm -f app.py requirements.txt hello_app_*.tar.gz
-          tar -xzvf "$TARBALL"
-          rm -f "$TARBALL"
-
-          python3 -m venv venv
-          ./venv/bin/pip install --upgrade pip
+          cd ~/hello-app
+          git pull origin main
           ./venv/bin/pip install -r requirements.txt
-
           pkill -f "venv/bin/python app.py" || true
-          echo "✅ Launching app with:"
-          ./venv/bin/python --version
           nohup ./venv/bin/python app.py > out.log 2>&1 &
