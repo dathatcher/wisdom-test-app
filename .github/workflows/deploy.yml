@@ -18,15 +18,10 @@ jobs:
     - name: 📥 Checkout code
       uses: actions/checkout@v3
 
-    - name: 🗂️ Show files before packaging
-      run: ls -la
-
     - name: 🏗️ Build tar.gz package
       run: |
-        mkdir -p dist
-        VERSION=${{ github.event.inputs.version || 'pr' }}
-        echo "Packaging as: hello_app_${VERSION}.tar.gz"
-        tar -czvf dist/hello_app_${VERSION}.tar.gz app.py requirements.txt
+        mkdir dist
+        tar -czvf dist/hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz app.py requirements.txt
 
     - name: 💾 Upload tar.gz to GitHub Packages
       uses: actions/upload-artifact@v4
@@ -60,18 +55,19 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           cd hello-app
-          # Unpack and cleanup
+          rm -f app.py requirements.txt hello_app_*.tar.gz
           tar -xzvf hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz
           rm -f hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz
 
           # Set up virtual environment
           python3 -m venv venv
           source venv/bin/activate
-          venv/bin/pip install --upgrade pip
-          venv/bin/pip install -r requirements.txt
+          ./venv/bin/pip install --upgrade pip
+          ./venv/bin/pip install -r requirements.txt
 
-          # Stop previous app instance
-          pkill -f "venv/bin/python app.py" || true
+          # Stop any previously running instance
+          pkill -f "./venv/bin/python app.py" || true
 
-          # Start new instance
-          nohup venv/bin/python app.py > out.log 2>&1 &
+          # Start the app using the virtual environment
+          echo "✅ Using Python from virtualenv:" && ./venv/bin/python --version
+          nohup ./venv/bin/python app.py > out.log 2>&1 &
