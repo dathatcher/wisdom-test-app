@@ -22,15 +22,18 @@ jobs:
             cd ~
 
             if [ ! -d "$APP_DIR/.git" ]; then
+              echo "📦 First-time setup. Cloning repo..."
               rm -rf $APP_DIR
               git clone https://github.com/dathatcher/wisdom-test-app.git $APP_DIR
             else
+              echo "🔄 Pulling latest changes..."
               cd $APP_DIR
               git pull origin main
             fi
 
             cd $APP_DIR
 
+            echo "🐍 Setting up virtual environment..."
             if [ ! -d "venv" ]; then
               python3 -m venv venv
             fi
@@ -39,11 +42,16 @@ jobs:
             pip install --upgrade pip
             pip install -r requirements.txt
 
+            echo "🛑 Stopping previous Flask app (if running)..."
             pkill -f "venv/bin/python app.py" || true
+            sleep 1
 
-            echo "✅ Starting Flask App"
+            echo "🚀 Starting new Flask app..."
             nohup ./venv/bin/python app.py > out.log 2>&1 &
+            disown || true
 
             sleep 2
-            pgrep -af "python app.py" || echo "❌ App did not start"
-            echo "✅ Deployment complete"
+            echo "🔍 Checking if Flask app is running..."
+            pgrep -af "python app.py" || echo "⚠️ Flask app may not have started"
+
+            echo "✅ Deployment completed"
