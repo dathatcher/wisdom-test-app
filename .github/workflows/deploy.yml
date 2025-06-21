@@ -1,4 +1,4 @@
-name: 🚀 Deploy Hello App (Simple)
+name: 🚀 Simple Deploy to EC2
 
 on:
   push:
@@ -9,15 +9,33 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    - name: 🚀 SSH, Pull, and Restart App
-      uses: appleboy/ssh-action@v1.0.0
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USER }}
-        key: ${{ secrets.EC2_SSH_KEY }}
-        script: |
-          cd ~/hello-app
-          git pull origin main
-          ./venv/bin/pip install -r requirements.txt
-          pkill -f "venv/bin/python app.py" || true
-          nohup ./venv/bin/python app.py > out.log 2>&1 &
+      - name: 📡 Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            APP_DIR=~/hello-app
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              rm -rf $APP_DIR
+              git clone https://github.com/dathatcher/wisdom-test-app.git $APP_DIR
+            else
+              cd $APP_DIR
+              git pull origin main
+            fi
+
+            cd $APP_DIR
+
+            # Set up venv if needed
+            if [ ! -d "venv" ]; then
+              python3 -m venv venv
+            fi
+
+            source venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements.txt
+
+            pkill -f "venv/bin/python app.py" || true
+            nohup ./venv/bin/python app.py > out.log 2>&1 &
