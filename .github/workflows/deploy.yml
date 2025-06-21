@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📡 SSH Deploy & Restart App
+      - name: 📡 Deploy to EC2 & Restart App
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -41,16 +41,11 @@ jobs:
             pip install --upgrade pip
             pip install -r requirements.txt
 
-            echo "🛑 Killing previous app..."
-            pkill -f "venv/bin/python app.py" || true
-            sleep 1
-
-            echo "🚀 Starting Flask app with setsid..."
-            PYTHON=$(realpath venv/bin/python)
-            setsid $PYTHON app.py > out.log 2>&1 < /dev/null &
+            echo "🚀 Calling run_app.sh"
+            chmod +x run_app.sh
+            ./run_app.sh
 
             sleep 2
-            echo "🔍 Checking if app started..."
-            pgrep -af "python app.py" || echo "⚠️ Flask app may not have started"
+            pgrep -af "python app.py" || echo "⚠️ App may not have started"
 
-            echo "✅ Deployment completed"
+            echo "✅ Deployment finished"
