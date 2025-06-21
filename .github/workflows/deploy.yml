@@ -14,25 +14,32 @@ on:
 jobs:
   build-package:
     runs-on: ubuntu-latest
+    outputs:
+      tar_name: ${{ steps.set-tar-name.outputs.tar_name }}
+
     steps:
     - name: 📥 Checkout code
       uses: actions/checkout@v3
 
+    - name: 📛 Set version name
+      id: set-tar-name
+      run: |
+        VERSION="${{ github.event.inputs.version }}"
+        if [ -z "$VERSION" ]; then
+          VERSION="pr"
+        fi
+        echo "tar_name=hello_app_${VERSION}.tar.gz" >> $GITHUB_OUTPUT
+
     - name: 🏗️ Build tar.gz package
       run: |
         mkdir -p dist
-        VERSION_TAG="${{ github.event.inputs.version }}"
-        if [ -z "$VERSION_TAG" ]; then
-          VERSION_TAG="pr"
-        fi
-        echo "📦 Using version: $VERSION_TAG"
-        tar -czvf dist/hello_app_${VERSION_TAG}.tar.gz app.py requirements.txt
+        tar -czvf dist/${{ steps.set-tar-name.outputs.tar_name }} app.py requirements.txt
 
     - name: 💾 Upload tar.gz to GitHub Packages
       uses: actions/upload-artifact@v4
       with:
-        name: hello-app-${{ github.event.inputs.version || 'pr' }}
-        path: dist/hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz
+        name: ${{ steps.set-tar-name.outputs.tar_name }}
+        path: dist/${{ steps.set-tar-name.outputs.tar_name }}
 
   deploy-to-ec2:
     needs: build-package
@@ -41,7 +48,7 @@ jobs:
     - name: 📥 Download artifact
       uses: actions/download-artifact@v4
       with:
-        name: hello-app-${{ github.event.inputs.version || 'pr' }}
+        name: ${{ needs.build-package.outputs.tar_name }}
 
     - name: 📤 SCP to EC2
       uses: appleboy/scp-action@v0.1.4
@@ -49,7 +56,7 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
-        source: hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz
+        source: ${{ needs.build-package.outputs.tar_name }}
         target: /home/${{ secrets.EC2_USER }}/hello-app/
 
     - name: 🚀 SSH and Deploy with venv
@@ -60,28 +67,16 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           cd hello-app
-
-          # Determine tarball name
-          if [ -f "hello_app_${{ github.event.inputs.version }}.tar.gz" ]; then
-            TARBALL_NAME="hello_app_${{ github.event.inputs.version }}.tar.gz"
-          else
-            TARBALL_NAME="hello_app_pr.tar.gz"
-          fi
-
-          echo "📦 Unpacking $TARBALL_NAME"
+          TARBALL="${{ needs.build-package.outputs.tar_name }}"
+          echo "📦 Unpacking $TARBALL"
           rm -f app.py requirements.txt hello_app_*.tar.gz
-          tar -xzvf "$TARBALL_NAME"
-          rm -f "$TARBALL_NAME"
+          tar -xzvf "$TARBALL"
+          rm -f "$TARBALL"
 
-          # Set up virtual environment
           python3 -m venv venv
           ./venv/bin/pip install --upgrade pip
           ./venv/bin/pip install -r requirements.txt
 
-          # Stop previously running app if any
           pkill -f "venv/bin/python app.py" || true
-
-          # Start the app
-          echo "✅ Using Python from virtualenv:"
-          ./venv/bin/python --version
+          echo "✅ Starting app with:" && ./venv/bin/python --version
           nohup ./venv/bin/python app.py > out.log 2>&1 &
