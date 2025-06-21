@@ -18,19 +18,21 @@ jobs:
     - name: 📥 Checkout code
       uses: actions/checkout@v3
 
+    - name: 🗂️ Show files before packaging
+      run: ls -la
+
     - name: 🏗️ Build tar.gz package
       run: |
-        mkdir dist
-        echo "VERSION=${{ github.event.inputs.version || 'pr' }}" >> $GITHUB_ENV
-        TAR_NAME="hello_app_${VERSION}.tar.gz"
-        echo "TAR_NAME=$TAR_NAME" >> $GITHUB_ENV
-        tar -czvf dist/$TAR_NAME app.py requirements.txt
+        mkdir -p dist
+        VERSION=${{ github.event.inputs.version || 'pr' }}
+        echo "Packaging as: hello_app_${VERSION}.tar.gz"
+        tar -czvf dist/hello_app_${VERSION}.tar.gz app.py requirements.txt
 
     - name: 💾 Upload tar.gz to GitHub Packages
       uses: actions/upload-artifact@v4
       with:
-        name: hello-app
-        path: dist/${{ env.TAR_NAME }}
+        name: hello-app-${{ github.event.inputs.version || 'pr' }}
+        path: dist/hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz
 
   deploy-to-ec2:
     needs: build-package
@@ -39,7 +41,7 @@ jobs:
     - name: 📥 Download artifact
       uses: actions/download-artifact@v4
       with:
-        name: hello-app
+        name: hello-app-${{ github.event.inputs.version || 'pr' }}
 
     - name: 📤 SCP to EC2
       uses: appleboy/scp-action@v0.1.4
@@ -47,7 +49,7 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
-        source: ${{ env.TAR_NAME }}
+        source: hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz
         target: /home/${{ secrets.EC2_USER }}/hello-app/
 
     - name: 🚀 SSH and Deploy with venv
@@ -58,14 +60,18 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           cd hello-app
-          rm -f app.py requirements.txt hello_app_*.tar.gz
-          tar -xzvf hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz || tar -xzvf hello_app_pr.tar.gz
-          rm -f hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz || rm -f hello_app_pr.tar.gz
+          # Unpack and cleanup
+          tar -xzvf hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz
+          rm -f hello_app_${{ github.event.inputs.version || 'pr' }}.tar.gz
 
+          # Set up virtual environment
           python3 -m venv venv
           source venv/bin/activate
           venv/bin/pip install --upgrade pip
           venv/bin/pip install -r requirements.txt
 
+          # Stop previous app instance
           pkill -f "venv/bin/python app.py" || true
+
+          # Start new instance
           nohup venv/bin/python app.py > out.log 2>&1 &
