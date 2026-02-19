@@ -7,61 +7,32 @@ on:
 jobs:
   enforce:
     runs-on: ubuntu-latest
-
     steps:
       - name: Enforce allowed PR sources
-        id: validate
         shell: bash
         run: |
           base="${{ github.base_ref }}"
           head="${{ github.head_ref }}"
-          actor="${{ github.actor }}"
-          pr="${{ github.event.pull_request.number }}"
 
           echo "Base branch: $base"
           echo "Head branch: $head"
 
-          fail() {
-            msg="❌ Promotion Path Violation
-
-Source → Target
-$head → $base
-
-Actor: $actor
-PR #: $pr
-
-Reason: $1
-
-Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
-"
-            echo "$msg"
-            echo "failure_message<<EOF" >> $GITHUB_OUTPUT
-            echo "$msg" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-            exit 1
-          }
+          fail() { echo "ERROR: $1"; exit 1; }
 
           # Rule 1: quantico must come from development
           if [[ "$base" == "quantico" ]]; then
-            [[ "$head" == "development" ]] || fail "quantico must come from development."
+            [[ "$head" == "development" ]] || fail "PRs into 'quantico' must come from 'development' (got '$head')."
           fi
 
           # Rule 2: catweb must come from quantico
           if [[ "$base" == "catweb" ]]; then
-            [[ "$head" == "quantico" ]] || fail "catweb must come from quantico."
+            [[ "$head" == "quantico" ]] || fail "PRs into 'catweb' must come from 'quantico' (got '$head')."
           fi
 
-          echo "OK: Promotion path validated."
+          # Rule 3 (optional): development must come from feature branches
+          # Uncomment if you want to enforce naming like feature/*
+          # if [[ "$base" == "development" ]]; then
+          #   [[ "$head" == feature/* ]] || fail "PRs into 'development' must come from 'feature/*' branches (got '$head')."
+          # fi
 
-      - name: Comment on PR if violation
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const body = `${{ steps.validate.outputs.failure_message }}`;
-            github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              body
-            });
+          echo "OK: Promotion path validated."
