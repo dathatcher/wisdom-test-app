@@ -13,9 +13,13 @@ jobs:
         run: |
           base="${{ github.base_ref }}"
           head="${{ github.head_ref }}"
+          actor="${{ github.actor }}"
+          pr="${{ github.event.pull_request.number }}"
 
           echo "Base branch: $base"
           echo "Head branch: $head"
+          echo "Actor: $actor"
+          echo "PR: $pr"
 
           fail() { echo "ERROR: $1"; exit 1; }
 
