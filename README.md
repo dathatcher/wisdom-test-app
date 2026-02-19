@@ -1,1 +1,1 @@
-# wisdom-test-app
+# wisdom-test
