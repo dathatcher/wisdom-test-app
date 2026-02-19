@@ -21,7 +21,7 @@ jobs:
           echo "Actor: $actor"
           echo "PR: $pr"
 
-          fail() { echo "ERROR: $1"; exit 1; }
+          fail() { echo "ERROR: $1 - $actor"; exit 1; }
 
           # Rule 1: quantico must come from development
           if [[ "$base" == "quantico" ]]; then
