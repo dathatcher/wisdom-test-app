@@ -1,0 +1,38 @@
+name: Enforce promotion path
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+jobs:
+  enforce:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce allowed PR sources
+        shell: bash
+        run: |
+          base="${{ github.base_ref }}"
+          head="${{ github.head_ref }}"
+
+          echo "Base branch: $base"
+          echo "Head branch: $head"
+
+          fail() { echo "ERROR: $1"; exit 1; }
+
+          # Rule 1: quantico must come from development
+          if [[ "$base" == "quantico" ]]; then
+            [[ "$head" == "development" ]] || fail "PRs into 'quantico' must come from 'development' (got '$head')."
+          fi
+
+          # Rule 2: catweb must come from quantico
+          if [[ "$base" == "catweb" ]]; then
+            [[ "$head" == "quantico" ]] || fail "PRs into 'catweb' must come from 'quantico' (got '$head')."
+          fi
+
+          # Rule 3 (optional): development must come from feature branches
+          # Uncomment if you want to enforce naming like feature/*
+          # if [[ "$base" == "development" ]]; then
+          #   [[ "$head" == feature/* ]] || fail "PRs into 'development' must come from 'feature/*' branches (got '$head')."
+          # fi
+
+          echo "OK: Promotion path validated."
