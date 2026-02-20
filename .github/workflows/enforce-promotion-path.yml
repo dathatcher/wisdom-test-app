@@ -16,7 +16,7 @@ jobs:
           actor="${{ github.actor }}"
           pr="${{ github.event.pull_request.number }}"
 
-          echo "Head*Source) branch: $head"
+          echo "Head*(Source) branch: $head"
           echo "Base(Target) branch: $base"          
           echo "Actor: $actor"
           echo "PR: $pr"
