@@ -6,6 +6,7 @@ on:
 
 jobs:
   enforce:
+    name: Promotion Guardrail
     runs-on: ubuntu-latest
     steps:
       - name: Enforce allowed PR sources
@@ -16,7 +17,7 @@ jobs:
           actor="${{ github.actor }}"
           pr="${{ github.event.pull_request.number }}"
 
-          echo "Head*Source) branch: $head"
+          echo "Head*(Source) branch: $head"
           echo "Base(Target) branch: $base"          
           echo "Actor: $actor"
           echo "PR: $pr"
