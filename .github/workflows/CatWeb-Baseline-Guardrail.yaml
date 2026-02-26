@@ -1,0 +1,49 @@
+name: Catweb Baseline Guardrail
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+jobs:
+  enforce_catweb_baseline:
+    name: Catweb Baseline (for development)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (needed for git ancestry check)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure PR into development is based on catweb
+        shell: bash
+        run: |
+          base="${{ github.base_ref }}"
+          head="${{ github.head_ref }}"
+          actor="${{ github.actor }}"
+          pr="${{ github.event.pull_request.number }}"
+
+          echo "Source branch: $head"
+          echo "Target branch: $base"
+          echo "Actor: $actor"
+          echo "PR: $pr"
+
+          # Only enforce for PRs targeting development
+          if [[ "$base" != "development" ]]; then
+            echo "Not targeting development; skipping catweb baseline check."
+            exit 0
+          fi
+
+          fail() { echo "ERROR: $1 - $actor"; exit 1; }
+
+          echo "Validating that source branch '$head' is based on 'catweb'..."
+
+          # Ensure we have the latest catweb + PR head refs
+          git fetch origin catweb:refs/remotes/origin/catweb >/dev/null 2>&1 || true
+          git fetch origin "$head":refs/remotes/origin/"$head" >/dev/null 2>&1 || true
+
+          # catweb must be an ancestor of the PR head branch
+          if ! git merge-base --is-ancestor origin/catweb "origin/$head"; then
+            fail "PRs into 'development' must come from a branch based on 'catweb'. Rebase/merge your branch with 'catweb' and try again. (source='$head', target='$base')"
+          fi
+
+          echo "OK: Catweb baseline validated."
